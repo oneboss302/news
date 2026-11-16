@@ -42,6 +42,19 @@ it its this that these those after before over under into about amid says say sa
 will would could can may might not no than then up out off what who why how when where his her their they he she
 we you our your more most first last two three one year years day week us u.s via vs against over amid""".split())
 
+# Never show satire or fabricated-news outlets
+SATIRE = ["the onion", "theonion", "babylon bee", "babylonbee", "clickhole", "beaverton", "waterford whispers", "daily mash",
+          "thedailymash", "newsthump", "duffel blog", "duffelblog", "reductress", "the hard times", "thehardtimes",
+          "points in case", "national report", "world news daily report", "worldnewsdailyreport", "empire news",
+          "the shovel", "betoota", "der postillon", "borowitz", "huzlers", "react365", "newsbiscuit", "the spoof", "thespoof",
+          "weekly world news", "satire", "parody"]
+
+
+def is_satire(publisher, url):
+    blob = f"{publisher} {url}".lower()
+    return any(x in blob for x in SATIRE)
+
+
 
 def localname(tag):
     return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
@@ -100,7 +113,7 @@ def fetch(feed):
             continue
         title = clean(child_text(el, "title"))
         link = atom_link(el)
-        if not title or not link.startswith(("http://", "https://")):
+        if not title or not link.startswith(("http://", "https://")) or is_satire(src, link):
             continue
         out.append({
             "src": src, "sec": sec, "title": title, "link": link,
