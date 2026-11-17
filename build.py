@@ -10,30 +10,50 @@ from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 
 # (source, section, url). Order sets which outlet leads a shared story.
+# Left, center and right outlets, interleaved within each section. Order is rank: when several outlets
+# cover a story, the earliest feed supplies the lead. Leanings (comments) are rough, per AllSides.
 FEEDS = [
-    ("BBC", "world", "https://feeds.bbci.co.uk/news/world/rss.xml"),
-    ("NPR", "us", "https://feeds.npr.org/1001/rss.xml"),
-    ("New York Times", "world", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"),
-    ("New York Times", "us", "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"),
-    ("Guardian", "world", "https://www.theguardian.com/world/rss"),
-    ("Guardian", "us", "https://www.theguardian.com/us-news/rss"),
-    ("BBC", "us", "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml"),
-    ("Washington Post", "world", "https://feeds.washingtonpost.com/rss/world"),
-    ("Al Jazeera", "world", "https://www.aljazeera.com/xml/rss/all.xml"),
-    ("DW", "world", "https://rss.dw.com/rdf/rss-en-all"),
-    ("France 24", "world", "https://www.france24.com/en/rss"),
-    ("CBS News", "us", "https://www.cbsnews.com/latest/rss/main"),
-    ("ABC News", "us", "https://feeds.abcnews.com/abcnews/topstories"),
-    ("BBC", "business", "https://feeds.bbci.co.uk/news/business/rss.xml"),
-    ("CNBC", "business", "https://www.cnbc.com/id/100003114/device/rss/rss.html"),
-    ("NPR", "business", "https://feeds.npr.org/1006/rss.xml"),
-    ("BBC", "tech", "https://feeds.bbci.co.uk/news/technology/rss.xml"),
-    ("Ars Technica", "tech", "https://feeds.arstechnica.com/arstechnica/index"),
-    ("The Verge", "tech", "https://www.theverge.com/rss/index.xml"),
-    ("BBC", "science", "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"),
-    ("NPR", "science", "https://feeds.npr.org/1007/rss.xml"),
+    ("BBC", "world", "https://feeds.bbci.co.uk/news/world/rss.xml"),  # C
+    ("Fox News", "world", "https://moxie.foxnews.com/google-publisher/world.xml"),  # R
+    ("New York Times", "world", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"),  # L
+    ("UPI", "world", "https://rss.upi.com/news/world_news.rss"),  # C
+    ("Washington Times", "world", "https://www.washingtontimes.com/rss/headlines/news/world/"),  # R
+    ("Guardian", "world", "https://www.theguardian.com/world/rss"),  # L
+    ("DW", "world", "https://rss.dw.com/rdf/rss-en-all"),  # C
+    ("Washington Post", "world", "https://feeds.washingtonpost.com/rss/world"),  # L
+    ("France 24", "world", "https://www.france24.com/en/rss"),  # C
+    ("Al Jazeera", "world", "https://www.aljazeera.com/xml/rss/all.xml"),  # L
+    ("The Hill", "us", "https://thehill.com/news/feed/"),  # C
+    ("Fox News", "us", "https://moxie.foxnews.com/google-publisher/us.xml"),  # R
+    ("NPR", "us", "https://feeds.npr.org/1001/rss.xml"),  # L
+    ("UPI", "us", "https://rss.upi.com/news/top_news.rss"),  # C
+    ("NY Post", "us", "https://nypost.com/news/feed/"),  # R
+    ("New York Times", "us", "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"),  # L
+    ("BBC", "us", "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml"),  # C
+    ("Washington Examiner", "us", "https://www.washingtonexaminer.com/feed/"),  # R
+    ("Guardian", "us", "https://www.theguardian.com/us-news/rss"),  # L
+    ("Fox News", "us", "https://moxie.foxnews.com/google-publisher/politics.xml"),  # R
+    ("CBS News", "us", "https://www.cbsnews.com/latest/rss/main"),  # L
+    ("ABC News", "us", "https://feeds.abcnews.com/abcnews/topstories"),  # L
+    ("Bloomberg", "business", "https://feeds.bloomberg.com/markets/news.rss"),  # C
+    ("Fox Business", "business", "https://moxie.foxbusiness.com/google-publisher/latest.xml"),  # R
+    ("BBC", "business", "https://feeds.bbci.co.uk/news/business/rss.xml"),  # C
+    ("CNBC", "business", "https://www.cnbc.com/id/100003114/device/rss/rss.html"),  # L
+    ("Forbes", "business", "https://www.forbes.com/business/feed/"),  # C
+    ("NY Post", "business", "https://nypost.com/business/feed/"),  # R
+    ("NPR", "business", "https://feeds.npr.org/1006/rss.xml"),  # L
+    ("Washington Times", "business", "https://www.washingtontimes.com/rss/headlines/news/business-economy/"),  # R
+    ("BBC", "tech", "https://feeds.bbci.co.uk/news/technology/rss.xml"),  # C
+    ("Fox News", "tech", "https://moxie.foxnews.com/google-publisher/tech.xml"),  # R
+    ("Ars Technica", "tech", "https://feeds.arstechnica.com/arstechnica/index"),  # L
+    ("The Hill", "tech", "https://thehill.com/policy/technology/feed/"),  # C
+    ("The Verge", "tech", "https://www.theverge.com/rss/index.xml"),  # L
+    ("BBC", "science", "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"),  # C
+    ("NPR", "science", "https://feeds.npr.org/1007/rss.xml"),  # L
 ]
 SECTIONS = [("world", "World"), ("us", "U.S."), ("business", "Business"), ("tech", "Technology"), ("science", "Science")]
+# When a center outlet covers a story, its headline leads; left and right outlets are listed under it.
+CENTER = {"BBC", "UPI", "DW", "France 24", "The Hill", "Bloomberg", "Forbes"}
 MAX_AGE = timedelta(hours=36)
 UA = "Mozilla/5.0 (compatible; castafero-news/1.0; RSS reader)"
 
@@ -237,7 +257,7 @@ def main(out_path):
         sys.exit(f"only {len(uniq)} stories fetched; keeping the previous page")
 
     groups = cluster(uniq)
-    rank_of = lambda it: order[(it["src"], it["sec"])]
+    rank_of = lambda it: (it["src"] not in CENTER, order[(it["src"], it["sec"])])
     newest = lambda g: max((x["date"] for x in g if x["date"]), default=now - MAX_AGE)
     top = []
     for g in groups:
