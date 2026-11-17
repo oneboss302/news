@@ -301,7 +301,7 @@ TEMPLATE = r"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Castafero News</title>
+<title>The Castafero Consensus</title>
 <meta name="description" content="Top world, U.S., business, tech and science headlines, updated every two hours.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Old+Standard+TT:wght@700&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Libre+Franklin:wght@500;700&display=swap" rel="stylesheet">
@@ -318,7 +318,8 @@ a:hover{text-decoration:underline;text-decoration-thickness:1px;text-underline-o
 /* masthead */
 .ears{display:flex;justify-content:space-between;gap:12px;padding:14px 0 6px;font:500 .72rem/1.3 var(--f-label);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .ears div:last-child{text-align:right}
-.mast{text-align:center;font:700 clamp(1.9rem,7.5vw,4.6rem)/1.05 var(--f-mast);margin:6px 0 10px;text-transform:uppercase;letter-spacing:.04em}
+.mast{text-align:center;font:700 clamp(1.5rem,6.2vw,4.4rem)/1.05 var(--f-mast);margin:2px 0 10px;text-transform:uppercase;letter-spacing:.04em}
+.mast small{display:block;font-size:max(.32em,.7rem);letter-spacing:.4em;margin-bottom:2px}
 .dateline{display:flex;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;border-top:3px double var(--rule);border-bottom:1px solid var(--rule);padding:6px 0;font:700 .74rem var(--f-label);text-transform:uppercase;letter-spacing:.1em}
 nav{display:flex;justify-content:center;gap:4px 22px;flex-wrap:wrap;padding:8px 0;border-bottom:3px double var(--rule);font:500 .8rem var(--f-label);text-transform:uppercase;letter-spacing:.12em}
 main{padding:20px 0 48px}
@@ -366,7 +367,7 @@ footer{border-top:3px double var(--rule);padding:14px 0 40px;color:var(--muted);
 <body>
 <header class="wrap">
   <div class="ears"><div>Top headlines from<br>{{NSRC}} newsrooms</div><div>“All the news that<br>fits in two hours”</div></div>
-  <h1 class="mast">Castafero News</h1>
+  <h1 class="mast"><small>The</small>Castafero Consensus</h1>
   <div class="dateline"><span id="today"></span><span>{{COUNT}} stories · last 36 hours</span><span>Updated <time id="upd" datetime="{{UPDATED}}">{{UPDATED}}</time></span></div>
   <nav><a href="#top">Front Page</a>{{NAV}}</nav>
 </header>
