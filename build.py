@@ -54,6 +54,11 @@ FEEDS = [
 SECTIONS = [("world", "World"), ("us", "U.S."), ("business", "Business"), ("tech", "Technology"), ("science", "Science")]
 # When a center outlet covers a story, its headline leads; left and right outlets are listed under it.
 CENTER = {"BBC", "UPI", "DW", "France 24", "The Hill", "Bloomberg", "Forbes"}
+# Paywalled or metered; a free outlet's link leads when one covers the story, and these get a lock.
+PAYWALL = {"New York Times", "Washington Post", "Bloomberg", "Forbes", "CNBC", "The Verge"}
+LOCK = ('<svg class="lock" viewBox="0 0 16 16" aria-label="Subscription may be required" role="img">'
+        '<title>Subscription may be required</title><path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h1v8H3V7zm2 0h4V5a2 2 0 1 0-4 0z"/></svg>')
+NO_HOTLINK = {"UPI"}  # their image CDN returns 403 to other sites
 MAX_AGE = timedelta(hours=36)
 UA = "Mozilla/5.0 (compatible; castafero-news/1.0; RSS reader)"
 
@@ -155,7 +160,7 @@ def fetch(feed):
             "src": src, "sec": sec, "title": title, "link": link,
             "desc": clean(child_text(el, "description", "summary", "encoded", "content"), 220),
             "date": parse_date(child_text(el, "pubDate", "date", "published", "updated")),
-            "img": image_of(el),
+            "img": "" if src in NO_HOTLINK else image_of(el),
         })
     return out[:40]
 
@@ -216,18 +221,21 @@ def e(s):
     return html.escape(s or "", quote=True)
 
 
-def story_html(lead, others=(), kind="", img=""):
+def story_html(lead, others=(), kind="", imgs=()):
     """kind: "lead" (front-page lead), "rail", "brief", "" (section column story)."""
     t = ago_attr(lead["date"])
     also = ""
     if others:
-        links = " · ".join(f'<a href="{e(o["link"])}" rel="noopener">{e(o["src"])}</a>' for o in others[:6])
+        links = " · ".join(f'<a href="{e(o["link"])}" rel="noopener">{e(o["src"])}{LOCK if o["src"] in PAYWALL else ""}</a>' for o in others[:6])
         also = f'<div class="also">Also reported by {links}</div>'
-    pic = (f'<figure><img src="{e(img)}" alt="" loading="lazy" referrerpolicy="no-referrer"></figure>' if img else "")
+    # a broken photo falls back to the next outlet's, then the figure disappears
+    pic = (f'<figure><img src="{e(imgs[0])}" data-alt="{e(" ".join(imgs[1:4]))}" alt="" loading="lazy" referrerpolicy="no-referrer" '
+           'onerror="var a=this.dataset.alt.split(\' \').filter(Boolean);if(a.length){this.dataset.alt=a.slice(1).join(\' \');this.src=a[0]}else this.closest(\'figure\').remove()">'
+           '</figure>' if imgs else "")
     deck = f'<p>{e(lead["desc"])}</p>' if lead["desc"] and lead["desc"] != lead["title"] and kind != "brief" else ""
     return (f'<article class="story {kind}">{pic}'
             f'<h3><a href="{e(lead["link"])}" rel="noopener">{e(lead["title"])}</a></h3>{deck}'
-            f'<div class="meta"><span class="src">{e(lead["src"])}</span>'
+            f'<div class="meta"><span class="src">{e(lead["src"])}{LOCK if lead["src"] in PAYWALL else ""}</span>'
             f'{f"<time datetime=\"{t}\">{t}</time>" if t else ""}</div>{also}</article>')
 
 
@@ -257,7 +265,7 @@ def main(out_path):
         sys.exit(f"only {len(uniq)} stories fetched; keeping the previous page")
 
     groups = cluster(uniq)
-    rank_of = lambda it: (it["src"] not in CENTER, order[(it["src"], it["sec"])])
+    rank_of = lambda it: (it["src"] in PAYWALL, it["src"] not in CENTER, order[(it["src"], it["sec"])])
     newest = lambda g: max((x["date"] for x in g if x["date"]), default=now - MAX_AGE)
     top = []
     for g in groups:
@@ -277,13 +285,14 @@ def main(out_path):
                 used.add(x["src"])
                 others.append(x)
         kind = "lead" if i == 0 else "rail" if i <= 3 else "brief"
-        img = next((x["img"] for x in g if x["img"]), "") if kind == "lead" else ""
-        top_html[kind].append(story_html(lead, others, kind, img))
+        imgs = [x["img"] for x in g if x["img"]] if kind == "lead" else []
+        top_html[kind].append(story_html(lead, others, kind, imgs))
 
     sec_html = []
     for key, label in SECTIONS:
         pool = [x for x in uniq if x["sec"] == key and id(x) not in in_top]
         pool.sort(key=lambda x: x["date"] or now - MAX_AGE, reverse=True)
+        pool.sort(key=lambda x: x["src"] in PAYWALL)  # stable: free stories first, each group newest first
         picked, toks_seen = [], []
         for x in pool:
             tk = tokens(x["title"])
@@ -298,7 +307,7 @@ def main(out_path):
         first = next((x for x in picked if x["img"]), picked[0])
         rest = [x for x in picked if x is not first]
         sec_html.append(f'<section class="sec" id="{key}"><h2><span>{label}</span></h2><div class="cols">'
-                        + story_html(first, kind="sec-lead", img=first["img"])
+                        + story_html(first, kind="sec-lead", imgs=[first["img"]] if first["img"] else [])
                         + "".join(story_html(x) for x in rest) + "</div></section>")
 
     sources = sorted({s for s, _, _ in FEEDS})
@@ -347,6 +356,7 @@ main{padding:20px 0 48px}
 .story p{margin:0 0 6px;font-size:.93rem;color:var(--ink);hyphens:auto}
 .meta{display:flex;gap:10px;font:500 .7rem var(--f-label);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .src{color:var(--accent);font-weight:700}
+.lock{width:.85em;height:.85em;margin-left:3px;vertical-align:-.05em;opacity:.75}
 .also{margin-top:6px;font:italic .8rem var(--f-body);color:var(--muted)}
 .also a{color:var(--ink);font-style:normal;font-weight:700}
 figure{margin:0 0 10px}
@@ -397,7 +407,7 @@ footer{border-top:3px double var(--rule);padding:14px 0 40px;color:var(--muted);
   </section>
   {{SECTIONS}}
 </main>
-<footer><div class="wrap">Headlines, summaries and photos come from the publishers' RSS feeds ({{SOURCES}}). Every link goes to the original article. The front page leads with the stories the most outlets are covering. Refreshed every two hours.</div></footer>
+<footer><div class="wrap">Headlines, summaries and photos come from the publishers' RSS feeds ({{SOURCES}}). Every link goes to the original article; a lock marks outlets that may require a subscription, and a free outlet's link leads whenever one covers the story. The front page leads with the stories the most outlets are covering. Refreshed every two hours.</div></footer>
 <script>
 (function(){
   function ago(d){var m=Math.round((Date.now()-d)/60000);if(m<1)return"just now";if(m<60)return m+" min ago";var h=Math.round(m/60);return h<24?h+"h ago":Math.round(h/24)+"d ago"}
@@ -405,7 +415,6 @@ footer{border-top:3px double var(--rule);padding:14px 0 40px;color:var(--muted);
   var u=document.getElementById("upd"),d=new Date(u.getAttribute("datetime"));
   if(!isNaN(d)){u.textContent=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZoneName:"short"});
     document.getElementById("today").textContent=d.toLocaleDateString([],{weekday:"long",month:"long",day:"numeric",year:"numeric"})}
-  document.querySelectorAll("figure img").forEach(function(i){i.onerror=function(){i.closest("figure").remove()}});
   setTimeout(function(){location.reload()},30*60*1000);
 })();
 </script>
