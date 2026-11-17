@@ -102,6 +102,22 @@ def clean(s, limit=None):
     return s
 
 
+def image_of(el):
+    """Largest image in media:content / media:thumbnail / enclosure, or ''."""
+    best, best_w = "", -1
+    for c in el.iter():
+        name, url = localname(c.tag), c.get("url") or ""
+        kind = (c.get("medium") or c.get("type") or "").lower()
+        if name not in ("content", "thumbnail", "enclosure") or not url.startswith("https://"):
+            continue
+        if name != "thumbnail" and "image" not in kind and not re.search(r"\.(jpe?g|png|webp)(\?|$)", url, re.I):
+            continue
+        w = int(c.get("width") or 0)
+        if w > best_w:
+            best, best_w = url, w
+    return best
+
+
 def fetch(feed):
     src, sec, url = feed
     req = urllib.request.Request(url, headers={"User-Agent": UA})
@@ -119,6 +135,7 @@ def fetch(feed):
             "src": src, "sec": sec, "title": title, "link": link,
             "desc": clean(child_text(el, "description", "summary", "encoded", "content"), 220),
             "date": parse_date(child_text(el, "pubDate", "date", "published", "updated")),
+            "img": image_of(el),
         })
     return out[:40]
 
@@ -179,15 +196,17 @@ def e(s):
     return html.escape(s or "", quote=True)
 
 
-def story_html(lead, others=(), big=False):
+def story_html(lead, others=(), kind="", img=""):
+    """kind: "lead" (front-page lead), "rail", "brief", "" (section column story)."""
     t = ago_attr(lead["date"])
     also = ""
     if others:
         links = " · ".join(f'<a href="{e(o["link"])}" rel="noopener">{e(o["src"])}</a>' for o in others[:6])
-        also = f'<div class="also">Also covered by {links}</div>'
-    return (f'<article class="story{" big" if big else ""}">'
-            f'<h3><a href="{e(lead["link"])}" rel="noopener">{e(lead["title"])}</a></h3>'
-            f'{f"<p>{e(lead["desc"])}</p>" if lead["desc"] and lead["desc"] != lead["title"] else ""}'
+        also = f'<div class="also">Also reported by {links}</div>'
+    pic = (f'<figure><img src="{e(img)}" alt="" loading="lazy" referrerpolicy="no-referrer"></figure>' if img else "")
+    deck = f'<p>{e(lead["desc"])}</p>' if lead["desc"] and lead["desc"] != lead["title"] and kind != "brief" else ""
+    return (f'<article class="story {kind}">{pic}'
+            f'<h3><a href="{e(lead["link"])}" rel="noopener">{e(lead["title"])}</a></h3>{deck}'
             f'<div class="meta"><span class="src">{e(lead["src"])}</span>'
             f'{f"<time datetime=\"{t}\">{t}</time>" if t else ""}</div>{also}</article>')
 
@@ -230,14 +249,16 @@ def main(out_path):
     top = top[:12]
     in_top = {id(x) for _, _, g in top for x in g}
 
-    top_html = []
+    top_html = {"lead": [], "rail": [], "brief": []}
     for i, (_, _, g) in enumerate(top):
         lead, others, used = g[0], [], {g[0]["src"]}
         for x in g[1:]:
             if x["src"] not in used:
                 used.add(x["src"])
                 others.append(x)
-        top_html.append(story_html(lead, others, big=i < 2))
+        kind = "lead" if i == 0 else "rail" if i <= 3 else "brief"
+        img = next((x["img"] for x in g if x["img"]), "") if kind == "lead" else ""
+        top_html[kind].append(story_html(lead, others, kind, img))
 
     sec_html = []
     for key, label in SECTIONS:
@@ -252,12 +273,20 @@ def main(out_path):
             picked.append(x)
             if len(picked) == 10:
                 break
-        sec_html.append(f'<section class="sec" id="{key}"><h2>{label}</h2>'
-                        + "".join(story_html(x) for x in picked) + "</section>")
+        if not picked:
+            continue
+        first = next((x for x in picked if x["img"]), picked[0])
+        rest = [x for x in picked if x is not first]
+        sec_html.append(f'<section class="sec" id="{key}"><h2><span>{label}</span></h2><div class="cols">'
+                        + story_html(first, kind="sec-lead", img=first["img"])
+                        + "".join(story_html(x) for x in rest) + "</div></section>")
 
     sources = sorted({s for s, _, _ in FEEDS})
     page = TEMPLATE.replace("{{UPDATED}}", ago_attr(now)) \
-        .replace("{{TOP}}", "".join(top_html)) \
+        .replace("{{LEAD}}", "".join(top_html["lead"])) \
+        .replace("{{RAIL}}", "".join(top_html["rail"])) \
+        .replace("{{BRIEFS}}", "".join(top_html["brief"])) \
+        .replace("{{NSRC}}", str(len({s for s, _, _ in FEEDS}))) \
         .replace("{{SECTIONS}}", "".join(sec_html)) \
         .replace("{{NAV}}", "".join(f'<a href="#{k}">{l}</a>' for k, l in SECTIONS)) \
         .replace("{{SOURCES}}", e(", ".join(sources))) \
@@ -275,58 +304,88 @@ TEMPLATE = r"""<!doctype html>
 <title>Castafero News</title>
 <meta name="description" content="Top world, U.S., business, tech and science headlines, updated every two hours.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Libre+Franklin:wght@500;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f7f5f0;--surface:#fffdf8;--ink:#1c1b19;--muted:#6b665d;--line:#e3ded3;--accent:#b4232a;--soft:#f1ece2;
-  --f-display:"Fraunces",Georgia,serif;--f-body:"Inter",system-ui,sans-serif}
-@media (prefers-color-scheme:dark){:root{--bg:#141412;--surface:#1c1b19;--ink:#ece8df;--muted:#a19b90;--line:#33312c;--accent:#ff6b6b;--soft:#24221f}}
+:root{--paper:#f4efe4;--ink:#1a1814;--muted:#5e584d;--rule:#1a1814;--hair:#cfc6b4;--accent:#8e1b1b;
+  --f-mast:"UnifrakturMaguntia","Old English Text MT",serif;--f-head:"Playfair Display",Georgia,serif;
+  --f-body:"Libre Caslon Text",Georgia,serif;--f-label:"Libre Franklin",Arial,sans-serif}
+@media (prefers-color-scheme:dark){:root{--paper:#16140f;--ink:#e9e3d6;--muted:#a59d8e;--rule:#e9e3d6;--hair:#3b372f;--accent:#e07a6b}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--f-body)}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--f-body)}
 a{color:inherit;text-decoration:none}
-.wrap{max-width:1180px;margin:0 auto;padding:0 16px}
-header{border-bottom:3px double var(--line);padding:20px 0 0}
-.mast{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.mast h1{font:700 clamp(2rem,5vw,3rem)/1 var(--f-display);margin:0;letter-spacing:-.01em}
-.mast h1 span{color:var(--accent)}
-.upd{color:var(--muted);font-size:.88rem}
-nav{display:flex;gap:4px;overflow-x:auto;padding:12px 0;margin-top:12px;border-top:1px solid var(--line)}
-nav a{padding:6px 12px;border-radius:999px;font-size:.9rem;font-weight:500;white-space:nowrap}
-nav a:hover{background:var(--soft)}
-main{padding:24px 0 48px}
-h2{font:700 1.35rem var(--f-display);margin:0 0 14px;padding-bottom:6px;border-bottom:2px solid var(--ink)}
-.top{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:18px;margin-bottom:36px}
-.story{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
-.story h3{font:600 1.05rem/1.3 var(--f-display);margin:0 0 6px}
-.story h3 a:hover{text-decoration:underline;text-decoration-color:var(--accent)}
-.story.big h3{font-size:1.35rem}
-.story p{margin:0 0 10px;color:var(--muted);font-size:.92rem}
-.meta{display:flex;gap:10px;font-size:.8rem;color:var(--muted)}
-.src{font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
-.also{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:.82rem;color:var(--muted)}
-.also a{color:var(--ink);font-weight:500}.also a:hover{color:var(--accent)}
-.secs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:28px}
-.sec .story{background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 0}
-.sec .story p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-footer{border-top:1px solid var(--line);padding:20px 0 40px;color:var(--muted);font-size:.82rem}
+a:hover{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px}
+/* masthead */
+.ears{display:flex;justify-content:space-between;gap:12px;padding:14px 0 6px;font:500 .72rem/1.3 var(--f-label);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.ears div:last-child{text-align:right}
+.mast{text-align:center;font:400 clamp(2.6rem,9vw,5.6rem)/1 var(--f-mast);margin:4px 0 8px;letter-spacing:.01em}
+.dateline{display:flex;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;border-top:3px double var(--rule);border-bottom:1px solid var(--rule);padding:6px 0;font:700 .74rem var(--f-label);text-transform:uppercase;letter-spacing:.1em}
+nav{display:flex;justify-content:center;gap:4px 22px;flex-wrap:wrap;padding:8px 0;border-bottom:3px double var(--rule);font:500 .8rem var(--f-label);text-transform:uppercase;letter-spacing:.12em}
+main{padding:20px 0 48px}
+/* stories */
+.story h3{font:700 1.1rem/1.2 var(--f-head);margin:0 0 6px}
+.story p{margin:0 0 6px;font-size:.93rem;color:var(--ink);hyphens:auto}
+.meta{display:flex;gap:10px;font:500 .7rem var(--f-label);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.src{color:var(--accent);font-weight:700}
+.also{margin-top:6px;font:italic .8rem var(--f-body);color:var(--muted)}
+.also a{color:var(--ink);font-style:normal;font-weight:700}
+figure{margin:0 0 10px}
+figure img{width:100%;display:block;filter:grayscale(.15) contrast(1.02);border:1px solid var(--hair)}
+/* front page */
+.front{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:0;border-bottom:1px solid var(--rule);padding-bottom:18px}
+.front>.leadcol{padding-right:22px;border-right:1px solid var(--hair)}
+.front>.rail{padding-left:22px}
+.story.lead h3{font:900 clamp(1.8rem,3.6vw,2.9rem)/1.06 var(--f-head);letter-spacing:-.01em;margin:4px 0 10px}
+.story.lead p{font-size:1.08rem;line-height:1.6}
+.story.lead p::first-letter{float:left;font:700 3.3rem/.82 var(--f-head);padding:4px 6px 0 0}
+.story.lead figure img{aspect-ratio:16/9;object-fit:cover}
+.rail .story{padding:0 0 14px;margin-bottom:14px;border-bottom:1px solid var(--hair)}
+.rail .story:last-child{border-bottom:0;margin-bottom:0}
+.rail .story h3{font-size:1.32rem;line-height:1.15}
+.briefs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:3px double var(--rule);margin-bottom:28px}
+.briefs .story{padding:14px 16px 16px;border-left:1px solid var(--hair)}
+.briefs .story:nth-child(4n+1){border-left:0;padding-left:0}
+.briefs .story h3{font-size:1rem}
+/* sections */
+.sec{margin-bottom:30px}
+.sec h2{display:flex;align-items:center;gap:14px;margin:0 0 14px;font:900 1.5rem var(--f-head);text-transform:uppercase;letter-spacing:.06em}
+.sec h2::before,.sec h2::after{content:"";flex:1;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);height:4px}
+.cols{column-count:3;column-gap:32px;column-rule:1px solid var(--hair)}
+.cols .story{break-inside:avoid;padding:0 0 12px;margin-bottom:12px;border-bottom:1px solid var(--hair)}
+.story.sec-lead h3{font-size:1.45rem;line-height:1.12}
+.cols .story p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.cols .story.sec-lead p{-webkit-line-clamp:5}
+footer{border-top:3px double var(--rule);padding:14px 0 40px;color:var(--muted);font:italic .85rem var(--f-body);text-align:center}
+@media (max-width:900px){
+  .front{grid-template-columns:1fr}.front>.leadcol{padding-right:0;border-right:0;padding-bottom:16px;border-bottom:1px solid var(--hair);margin-bottom:16px}.front>.rail{padding-left:0}
+  .briefs{grid-template-columns:repeat(2,minmax(0,1fr))}.briefs .story:nth-child(4n+1){padding-left:16px;border-left:1px solid var(--hair)}.briefs .story:nth-child(2n+1){border-left:0;padding-left:0}
+  .cols{column-count:2}}
+@media (max-width:600px){.briefs{grid-template-columns:1fr}.briefs .story{border-left:0!important;padding:12px 0!important;border-bottom:1px solid var(--hair)}.cols{column-count:1}.ears div:nth-child(2){display:none}}
 </style>
 </head>
 <body>
-<header><div class="wrap">
-  <div class="mast"><h1>Castafero <span>News</span></h1>
-  <div class="upd">Updated <time id="upd" datetime="{{UPDATED}}">{{UPDATED}}</time> · refreshes every 2 hours</div></div>
-  <nav><a href="#top">Top stories</a>{{NAV}}</nav>
-</div></header>
+<header class="wrap">
+  <div class="ears"><div>Top headlines from<br>{{NSRC}} newsrooms</div><div>“All the news that<br>fits in two hours”</div></div>
+  <h1 class="mast">Castafero News</h1>
+  <div class="dateline"><span id="today"></span><span>{{COUNT}} stories · last 36 hours</span><span>Updated <time id="upd" datetime="{{UPDATED}}">{{UPDATED}}</time></span></div>
+  <nav><a href="#top">Front Page</a>{{NAV}}</nav>
+</header>
 <main class="wrap">
-  <section id="top"><h2>Top stories</h2><div class="top">{{TOP}}</div></section>
-  <div class="secs">{{SECTIONS}}</div>
+  <section id="top">
+    <div class="front"><div class="leadcol">{{LEAD}}</div><div class="rail">{{RAIL}}</div></div>
+    <div class="briefs">{{BRIEFS}}</div>
+  </section>
+  {{SECTIONS}}
 </main>
-<footer><div class="wrap">Headlines and summaries come from the publishers' RSS feeds ({{SOURCES}}). Every link goes to the original article. Top stories are the ones the most outlets are covering. {{COUNT}} stories from the last 36 hours.</div></footer>
+<footer><div class="wrap">Headlines, summaries and photos come from the publishers' RSS feeds ({{SOURCES}}). Every link goes to the original article. The front page leads with the stories the most outlets are covering. Refreshed every two hours.</div></footer>
 <script>
 (function(){
   function ago(d){var m=Math.round((Date.now()-d)/60000);if(m<1)return"just now";if(m<60)return m+" min ago";var h=Math.round(m/60);return h<24?h+"h ago":Math.round(h/24)+"d ago"}
   document.querySelectorAll(".meta time").forEach(function(t){var d=new Date(t.getAttribute("datetime"));if(!isNaN(d)){t.textContent=ago(d);t.title=d.toLocaleString()}});
   var u=document.getElementById("upd"),d=new Date(u.getAttribute("datetime"));
-  if(!isNaN(d))u.textContent=d.toLocaleString([], {weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"});
+  if(!isNaN(d)){u.textContent=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit",timeZoneName:"short"});
+    document.getElementById("today").textContent=d.toLocaleDateString([],{weekday:"long",month:"long",day:"numeric",year:"numeric"})}
+  document.querySelectorAll("figure img").forEach(function(i){i.onerror=function(){i.closest("figure").remove()}});
   setTimeout(function(){location.reload()},30*60*1000);
 })();
 </script>
