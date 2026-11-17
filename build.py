@@ -35,7 +35,6 @@ FEEDS = [
     ("Fox News", "us", "https://moxie.foxnews.com/google-publisher/politics.xml"),  # R
     ("CBS News", "us", "https://www.cbsnews.com/latest/rss/main"),  # L
     ("ABC News", "us", "https://feeds.abcnews.com/abcnews/topstories"),  # L
-    ("Bloomberg", "business", "https://feeds.bloomberg.com/markets/news.rss"),  # C
     ("Fox Business", "business", "https://moxie.foxbusiness.com/google-publisher/latest.xml"),  # R
     ("BBC", "business", "https://feeds.bbci.co.uk/news/business/rss.xml"),  # C
     ("CNBC", "business", "https://www.cnbc.com/id/100003114/device/rss/rss.html"),  # L
@@ -43,7 +42,25 @@ FEEDS = [
     ("NY Post", "business", "https://nypost.com/business/feed/"),  # R
     ("NPR", "business", "https://feeds.npr.org/1006/rss.xml"),  # L
     ("Washington Times", "business", "https://www.washingtontimes.com/rss/headlines/news/business-economy/"),  # R
+    ("Investing.com", "finance", "https://www.investing.com/rss/news_25.rss"),  # C
+    ("Fox Business", "finance", "https://moxie.foxbusiness.com/google-publisher/markets.xml"),  # R
+    ("CBS News", "finance", "https://www.cbsnews.com/latest/rss/moneywatch"),  # L
+    ("Kiplinger", "finance", "https://www.kiplinger.com/feed/all"),  # C
+    ("Benzinga", "finance", "https://www.benzinga.com/feed"),  # C
+    ("NPR", "finance", "https://feeds.npr.org/1017/rss.xml"),  # L
+    ("MarketWatch", "finance", "https://feeds.content.dowjones.io/public/rss/mw_topstories"),  # C
+    ("Bloomberg", "finance", "https://feeds.bloomberg.com/markets/news.rss"),  # C
+    ("CNBC", "finance", "https://www.cnbc.com/id/15839069/device/rss/rss.html"),  # L
     ("BBC", "tech", "https://feeds.bbci.co.uk/news/technology/rss.xml"),  # C
+    ("The Register", "tech", "https://www.theregister.com/headlines.atom"),  # C
+    ("NY Post", "tech", "https://nypost.com/tech/feed/"),  # R
+    ("Engadget", "tech", "https://www.engadget.com/rss.xml"),  # C
+    ("CNET", "tech", "https://www.cnet.com/rss/news/"),  # C
+    ("ZDNet", "tech", "https://www.zdnet.com/news/rss.xml"),  # C
+    ("Tom's Hardware", "tech", "https://www.tomshardware.com/feeds/all"),  # C
+    ("BleepingComputer", "tech", "https://www.bleepingcomputer.com/feed/"),  # C
+    ("TechCrunch", "tech", "https://techcrunch.com/feed/"),  # L
+    ("Wired", "tech", "https://www.wired.com/feed/rss"),  # L
     ("Fox News", "tech", "https://moxie.foxnews.com/google-publisher/tech.xml"),  # R
     ("Ars Technica", "tech", "https://feeds.arstechnica.com/arstechnica/index"),  # L
     ("The Hill", "tech", "https://thehill.com/policy/technology/feed/"),  # C
@@ -51,11 +68,12 @@ FEEDS = [
     ("BBC", "science", "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"),  # C
     ("NPR", "science", "https://feeds.npr.org/1007/rss.xml"),  # L
 ]
-SECTIONS = [("world", "World"), ("us", "U.S."), ("business", "Business"), ("tech", "Technology"), ("science", "Science")]
+SECTIONS = [("world", "World"), ("us", "U.S."), ("business", "Business"), ("finance", "Finance"), ("tech", "Technology"), ("science", "Science")]
 # When a center outlet covers a story, its headline leads; left and right outlets are listed under it.
-CENTER = {"BBC", "UPI", "DW", "France 24", "The Hill", "Bloomberg", "Forbes"}
+CENTER = {"BBC", "UPI", "DW", "France 24", "The Hill", "Bloomberg", "Forbes", "Investing.com", "Kiplinger", "Benzinga",
+          "MarketWatch", "The Register", "Engadget", "CNET", "ZDNet", "Tom's Hardware", "BleepingComputer"}
 # Paywalled or metered; a free outlet's link leads when one covers the story, and these get a lock.
-PAYWALL = {"New York Times", "Washington Post", "Bloomberg", "Forbes", "CNBC", "The Verge"}
+PAYWALL = {"New York Times", "Washington Post", "Bloomberg", "Forbes", "CNBC", "The Verge", "MarketWatch", "Wired"}
 LOCK = ('<svg class="lock" viewBox="0 0 16 16" aria-label="Subscription may be required" role="img">'
         '<title>Subscription may be required</title><path fill="currentColor" d="M4 7V5a4 4 0 1 1 8 0v2h1v8H3V7zm2 0h4V5a2 2 0 1 0-4 0z"/></svg>')
 NO_HOTLINK = {"UPI"}  # their image CDN returns 403 to other sites
@@ -293,15 +311,19 @@ def main(out_path):
         pool = [x for x in uniq if x["sec"] == key and id(x) not in in_top]
         pool.sort(key=lambda x: x["date"] or now - MAX_AGE, reverse=True)
         pool.sort(key=lambda x: x["src"] in PAYWALL)  # stable: free stories first, each group newest first
-        picked, toks_seen = [], []
-        for x in pool:
-            tk = tokens(x["title"])
-            if any(len(tk & s) >= 2 and len(tk & s) / max(1, min(len(tk), len(s))) >= 0.5 for s in toks_seen):
-                continue
-            toks_seen.append(tk)
-            picked.append(x)
-            if len(picked) == 10:
-                break
+        picked, toks_seen, per_src = [], [], {}
+        for cap in (2, 10):  # 2 per outlet first so fast posters can't fill it; then top up if short
+            for x in pool:
+                if len(picked) == 10:
+                    break
+                if per_src.get(x["src"], 0) >= cap or any(x is p for p in picked):
+                    continue
+                tk = tokens(x["title"])
+                if any(len(tk & s) >= 2 and len(tk & s) / max(1, min(len(tk), len(s))) >= 0.5 for s in toks_seen):
+                    continue
+                toks_seen.append(tk)
+                per_src[x["src"]] = per_src.get(x["src"], 0) + 1
+                picked.append(x)
         if not picked:
             continue
         first = next((x for x in picked if x["img"]), picked[0])
