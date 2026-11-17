@@ -226,7 +226,7 @@ def story_html(lead, others=(), kind="", imgs=()):
     t = ago_attr(lead["date"])
     also = ""
     if others:
-        links = " · ".join(f'<a href="{e(o["link"])}" rel="noopener">{e(o["src"])}{LOCK if o["src"] in PAYWALL else ""}</a>' for o in others[:6])
+        links = " · ".join(f'<a href="{e(o["link"])}" target="_blank" rel="noopener">{e(o["src"])}{LOCK if o["src"] in PAYWALL else ""}</a>' for o in others[:6])
         also = f'<div class="also">Also reported by {links}</div>'
     # a broken photo falls back to the next outlet's, then the figure disappears
     pic = (f'<figure><img src="{e(imgs[0])}" data-alt="{e(" ".join(imgs[1:4]))}" alt="" loading="lazy" referrerpolicy="no-referrer" '
@@ -234,7 +234,7 @@ def story_html(lead, others=(), kind="", imgs=()):
            '</figure>' if imgs else "")
     deck = f'<p>{e(lead["desc"])}</p>' if lead["desc"] and lead["desc"] != lead["title"] and kind != "brief" else ""
     return (f'<article class="story {kind}">{pic}'
-            f'<h3><a href="{e(lead["link"])}" rel="noopener">{e(lead["title"])}</a></h3>{deck}'
+            f'<h3><a href="{e(lead["link"])}" target="_blank" rel="noopener">{e(lead["title"])}</a></h3>{deck}'
             f'<div class="meta"><span class="src">{e(lead["src"])}{LOCK if lead["src"] in PAYWALL else ""}</span>'
             f'{f"<time datetime=\"{t}\">{t}</time>" if t else ""}</div>{also}</article>')
 
