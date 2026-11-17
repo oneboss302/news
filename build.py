@@ -304,10 +304,10 @@ TEMPLATE = r"""<!doctype html>
 <title>The Castafero Consensus</title>
 <meta name="description" content="Top world, U.S., business, tech and science headlines, updated every two hours.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@900&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Libre+Franklin:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manufacturing+Consent&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Libre+Franklin:wght@500;700&display=swap" rel="stylesheet">
 <style>
 :root{--paper:#f4efe4;--ink:#1a1814;--muted:#5e584d;--rule:#1a1814;--hair:#cfc6b4;--accent:#8e1b1b;
-  --f-mast:"Grenze Gotisch","Old English Text MT",serif;--f-head:"Playfair Display",Georgia,serif;
+  --f-mast:"Manufacturing Consent","Old English Text MT",serif;--f-head:"Playfair Display",Georgia,serif;
   --f-body:"Libre Caslon Text",Georgia,serif;--f-label:"Libre Franklin",Arial,sans-serif}
 @media (prefers-color-scheme:dark){:root{--paper:#16140f;--ink:#e9e3d6;--muted:#a59d8e;--rule:#e9e3d6;--hair:#3b372f;--accent:#e07a6b}}
 *{box-sizing:border-box}
@@ -318,7 +318,7 @@ a:hover{text-decoration:underline;text-decoration-thickness:1px;text-underline-o
 /* masthead */
 .ears{display:flex;justify-content:space-between;gap:12px;padding:14px 0 6px;font:500 .72rem/1.3 var(--f-label);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .ears div:last-child{text-align:right}
-.mast{text-align:center;font:900 clamp(1.9rem,7.4vw,5.2rem)/1.05 var(--f-mast);margin:4px 0 10px}
+.mast{text-align:center;font:400 clamp(1.8rem,7vw,5rem)/1.1 var(--f-mast);margin:4px 0 10px}
 .dateline{display:flex;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;border-top:3px double var(--rule);border-bottom:1px solid var(--rule);padding:6px 0;font:700 .74rem var(--f-label);text-transform:uppercase;letter-spacing:.1em}
 nav{display:flex;justify-content:center;gap:4px 22px;flex-wrap:wrap;padding:8px 0;border-bottom:3px double var(--rule);font:500 .8rem var(--f-label);text-transform:uppercase;letter-spacing:.12em}
 main{padding:20px 0 48px}
